@@ -21,70 +21,137 @@ export class OrdersService {
       })();
   }
 
-  async fetchAllFinishedOrdersFromIdoSell(): Promise<
-    { orderID: string; products: { productID: string; quantity: number }[]; orderWorth: number }[]
-  > {
+  onModuleInit() {
+    console.log('OrdersService initialized with API URL:', this.apiUrl);
+    this.test().catch((error) => {
+      console.error('Error during OrdersService initialization:', error);
+    });
+  }
+
+async test() {
+  console.log('Testing OrdersService...');
+  await new Promise((resolve) => setTimeout(resolve, 3000));
+
+  try {
     const headers = {
       'X-API-KEY': this.apiKey,
       'Content-Type': 'application/json',
       Accept: 'application/json',
     };
 
-    const allTransformedOrders: {
+    const page = 1;
+    const fullUrl = `${this.apiUrl}/orders/orders/search`;
+
+    const payload = {
+      params: {
+        orderStatuses: ['finished'],
+        resultsPage: page,
+      },
+    };
+
+    const response = await axios.post(fullUrl, payload, { headers });
+    const result = response.data;
+
+    const orders = result.Results;
+
+    if (!Array.isArray(orders)) {
+      console.error('❌ Unexpected response format:', result);
+      return;
+    }
+
+    interface Order {
       orderID: string;
       products: { productID: string; quantity: number }[];
       orderWorth: number;
-    }[] = [];
-
-    const limitPerPage = 50;
-    let page = 1;
-
-    while (true) {
-      const payload = {
-        params: {
-          orderStatuses: ['finished'],
-          resultsPage: page,
-        },
-      };
-
-      const fullUrl = `${this.apiUrl}/orders/orders/search`;
-
-      console.log(`➡️ POST ${fullUrl}`);
-      console.log('➡️ BODY:', JSON.stringify(payload));
-
-      try {
-        const response = await axios.post(fullUrl, payload, { headers });
-
-        console.log('🧾 FULL response:', JSON.stringify(response.data, null, 2));
-
-        let raw = response.data;
-
-        
-        if (Array.isArray(raw)) {
-          console.log(`📦 Orders received directly. Page: ${page}, Count: ${raw.length}`);
-        } else if (Array.isArray(raw.orders)) {
-          console.log(`📦 Orders found in 'orders'. Page: ${page}, Count: ${raw.orders.length}`);
-          raw = raw.orders;
-        } else {
-          console.error('❌ Unknown response format from IdoSell');
-          console.log('🧾 Raw response:', JSON.stringify(raw, null, 2));
-          break;
-        }
-
-        const transformed = raw.map((order: any) => this.transformOrderData(order));
-        allTransformedOrders.push(...transformed);
-
-        if (raw.length < limitPerPage) break;
-
-        page++;
-      } catch (error: any) {
-        console.error('❌ Axios error:', error.response?.data || error.message);
-        throw error;
-      }
     }
 
-    return allTransformedOrders;
+    const transformedOrders: Order[] = orders.map((order: any) => {
+      const products = order.orderDetails?.productsResults?.map((p: any) => ({
+        productID: p.productId,
+        quantity: p.productQuantity,
+      })) ?? [];
+
+      const orderWorth =
+        order.orderDetails?.payments?.orderCurrency?.orderProductsCost ?? 0;
+
+      return {
+        orderID: order.orderId,
+        products,
+        orderWorth,
+      };
+    });
+
+    console.log('✅ transformedOrders:', JSON.stringify(transformedOrders, null, 2));
+  } catch (error) {
+    console.error('Error during test:', error);
   }
+}
+
+  async fetchAllFinishedOrdersFromIdoSell(): Promise<
+  {
+    orderID: string;
+    products: { productID: string; quantity: number }[];
+    orderWorth: number;
+  }[]
+> {
+  const headers = {
+    'X-API-KEY': this.apiKey,
+    'Content-Type': 'application/json',
+    Accept: 'application/json',
+  };
+
+  const allTransformedOrders: {
+    orderID: string;
+    products: { productID: string; quantity: number }[]; 
+    orderWorth: number;
+  }[] = [];
+
+  const limitPerPage = 50;
+  let page = 1;
+
+  while (true) {
+    const payload = {
+      params: {
+        orderStatuses: ['finished'],
+        resultsPage: page,
+      },
+    };
+
+    const fullUrl = `${this.apiUrl}/orders/orders/search`;
+
+    console.log(`➡️ POST ${fullUrl}`);
+    console.log('➡️ BODY:', JSON.stringify(payload));
+
+    try {
+      const response = await axios.post(fullUrl, payload, { headers });
+      const result = response.data;
+
+      const orders = result.Results;
+
+      if (!Array.isArray(orders)) {
+        console.error('❌ Unexpected response format:', JSON.stringify(result, null, 2));
+        break;
+      }
+
+      console.log(`📦 Orders on page ${page}: ${orders.length}`);
+
+      const transformed = orders.map((order: any) => this.transformOrderData(order));
+      allTransformedOrders.push(...transformed);
+
+      if (orders.length < limitPerPage) {
+        break; 
+      }
+
+      page++;
+    } catch (error: any) {
+      console.error('❌ Axios error:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  return allTransformedOrders;
+}
+
 
   async fetchOrderById(orderId: string) {
     const headers = {
@@ -106,14 +173,16 @@ export class OrdersService {
       const response = await axios.post(fullUrl, payload, { headers });
       const raw = response.data.data;
 
-
       if (!Array.isArray(raw) || raw.length === 0) {
         throw new Error(`Order with ID ${orderId} not found`);
       }
 
       return this.transformOrderData(raw[0]);
     } catch (error: any) {
-      console.error(`❌ Failed to fetch order ${orderId}:`, error.response?.data || error.message);
+      console.error(
+        `❌ Failed to fetch order ${orderId}:`,
+        error.response?.data || error.message,
+      );
       throw error;
     }
   }
