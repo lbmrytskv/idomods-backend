@@ -28,72 +28,54 @@ export class OrdersService {
   }
 
   onModuleInit() {
-    console.log('OrdersService initialized with API URL:', this.apiUrl);
-    this.test().catch((error) => {
+    console.log('🟡 Testing single order fetch...');
+    this.fetchSingleOrderForTest().catch((error) => {
       console.error('Error during OrdersService initialization:', error);
     });
   }
 
-  async test() {
-    console.log('Testing OrdersService...');
-    await new Promise((resolve) => setTimeout(resolve, 3000));
+ private async fetchSingleOrderForTest(): Promise<void> {
+  const fullUrl = `${this.apiUrl}/orders/orders/search`;
+  const testOrderId = "it@zooart.com.pl-103";
 
-    try {
-      const headers = {
-        'X-API-KEY': this.apiKey,
-        'Content-Type': 'application/json',
-        Accept: 'application/json',
-      };
+  try {
+    const headers = {
+      'X-API-KEY': this.apiKey,
+      'Content-Type': 'application/json',
+    };
 
-      const page = 1;
-      const fullUrl = `${this.apiUrl}/orders/orders/search`;
+    const payload = {
+      params: {
+        orderIds: [testOrderId],
+      },
+    };
 
-      const payload = {
-        params: {
-          orderStatuses: ['finished'],
-          resultsPage: page,
-        },
-      };
+    const response = await axios.post(fullUrl, payload, { headers });
 
-      const response = await axios.post(fullUrl, payload, { headers });
-      const result = response.data;
+    const order = response.data.Results?.[0];
 
-      const orders = result.Results;
-
-      if (!Array.isArray(orders)) {
-        console.error('❌ Unexpected response format:', result);
-        return;
-      }
-
-      const transformedOrders: Order[] = orders.map((order: any) => {
-        const products = order.orderDetails?.productsResults?.map((p: any) => ({
-          productID: p.productId,
-          quantity: p.productQuantity,
-        })) ?? [];
-
-        const orderWorth =
-          order.orderDetails?.payments?.orderCurrency?.orderProductsCost ?? 0;
-
-        return {
-          orderID: order.orderId,
-          products,
-          orderWorth,
-        };
-      });
-
-      console.log('✅ transformedOrders:', JSON.stringify(transformedOrders, null, 2));
-    } catch (error) {
-      console.error('Error during test:', error);
+    if (!order) {
+      console.warn('⚠️ Order not found in response');
+      return;
     }
-  }
 
-  async fetchAllFinishedOrdersFromIdoSell(): Promise<
-    {
-      orderID: string;
-      products: { productID: string; quantity: number }[];
-      orderWorth: number;
-    }[]
-  > {
+    const mappedOrder = this.transformOrderData(order);
+
+    console.log('📦 Order to upsert:', mappedOrder);
+
+    await this.upsertOrder(mappedOrder);
+    console.log(`✅ Order ${mappedOrder.orderID} upserted successfully`);
+  } catch (error: any) {
+    console.error('❌ Failed to fetch or upsert test order:', error?.response?.data || error.message);
+  }
+}
+
+
+  async fetchAllFinishedOrdersFromIdoSell(): Promise<{
+    orderID: string;
+    products: { productID: string; quantity: number }[];
+    orderWorth: number;
+  }[]> {
     const headers = {
       'X-API-KEY': this.apiKey,
       'Content-Type': 'application/json',
@@ -149,7 +131,6 @@ export class OrdersService {
       }
     }
 
-    
     await this.saveMultipleOrders(allTransformedOrders);
 
     return allTransformedOrders;
@@ -166,8 +147,8 @@ export class OrdersService {
       orderIds: [orderId],
     };
 
-    const fullUrl = `${this.apiUrl}/orders/orders`;
-
+    const fullUrl = `${this.apiUrl}/orders/orders/search`;
+    console.log(`➡️ POST ${fullUrl}`);
     console.log('➡️  POST (fetchOrderById)', fullUrl);
     console.log('➡️  Body:', JSON.stringify(payload));
 
@@ -212,8 +193,8 @@ export class OrdersService {
     };
   }
 
- 
   async upsertOrder(order: Order): Promise<void> {
+    console.log('📥 Upserting order:', order.orderID);
     await this.orderModel.updateOne(
       { orderID: order.orderID },
       { $set: order },
@@ -221,11 +202,9 @@ export class OrdersService {
     );
   }
 
-  
   async saveMultipleOrders(orders: Order[]): Promise<void> {
     for (const order of orders) {
       await this.upsertOrder(order);
     }
   }
 }
-

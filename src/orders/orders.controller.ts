@@ -8,7 +8,6 @@ export class OrdersController {
   @Get('test-fetch')
   async testFetch() {
     const orders = await this.ordersService.fetchAllFinishedOrdersFromIdoSell();
-    
     return orders;
   }
 }
