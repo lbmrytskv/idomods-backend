@@ -28,48 +28,15 @@ export class OrdersService {
   }
 
   onModuleInit() {
-    console.log('🟡 Testing single order fetch...');
-    this.fetchSingleOrderForTest().catch((error) => {
-      console.error('Error during OrdersService initialization:', error);
-    });
+    console.log('🟡 Fetching all finished orders...');
+    this.fetchAllFinishedOrdersFromIdoSell()
+      .then(() => {
+        console.log('✅ All orders fetched and saved to MongoDB');
+      })
+      .catch((error) => {
+        console.error('❌ Error while fetching all orders:', error);
+      });
   }
-
- private async fetchSingleOrderForTest(): Promise<void> {
-  const fullUrl = `${this.apiUrl}/orders/orders/search`;
-  const testOrderId = "it@zooart.com.pl-103";
-
-  try {
-    const headers = {
-      'X-API-KEY': this.apiKey,
-      'Content-Type': 'application/json',
-    };
-
-    const payload = {
-      params: {
-        orderIds: [testOrderId],
-      },
-    };
-
-    const response = await axios.post(fullUrl, payload, { headers });
-
-    const order = response.data.Results?.[0];
-
-    if (!order) {
-      console.warn('⚠️ Order not found in response');
-      return;
-    }
-
-    const mappedOrder = this.transformOrderData(order);
-
-    console.log('📦 Order to upsert:', mappedOrder);
-
-    await this.upsertOrder(mappedOrder);
-    console.log(`✅ Order ${mappedOrder.orderID} upserted successfully`);
-  } catch (error: any) {
-    console.error('❌ Failed to fetch or upsert test order:', error?.response?.data || error.message);
-  }
-}
-
 
   async fetchAllFinishedOrdersFromIdoSell(): Promise<{
     orderID: string;
@@ -117,7 +84,9 @@ export class OrdersService {
 
         console.log(`📦 Orders on page ${page}: ${orders.length}`);
 
-        const transformed = orders.map((order: any) => this.transformOrderData(order));
+        const transformed = orders.map((order: any) =>
+          this.transformOrderData(order),
+        );
         allTransformedOrders.push(...transformed);
 
         if (orders.length < limitPerPage) {
