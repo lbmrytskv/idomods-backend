@@ -1,9 +1,11 @@
 import { Prop, Schema, SchemaFactory } from '@nestjs/mongoose';
 import { Document } from 'mongoose';
 
+// Mongoose document type that includes both the Order class and Mongoose-specific fields (_id, etc.)
 export type OrderDocument = Order & Document;
 
-@Schema()
+@Schema({_id: false })
+// Defines an embedded subdocument schema for individual products in an order
 export class Product {
   @Prop({ required: true })
   productID: string;
@@ -12,7 +14,8 @@ export class Product {
   quantity: number;
 }
 
-@Schema()
+@Schema({timestamps: true })
+// Defines the main Order schema with automatic createdAt / updatedAt timestamps
 export class Order {
   @Prop({ required: true, unique: true })
   orderID: string;
@@ -22,6 +25,10 @@ export class Order {
 
   @Prop({ required: true })
   orderWorth: number;
+
+
 }
+
+
 
 export const OrderSchema = SchemaFactory.createForClass(Order);
